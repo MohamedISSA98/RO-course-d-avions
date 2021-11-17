@@ -1,0 +1,91 @@
+using JuMP, Gurobi, Random
+#Exponentielle
+Random.seed!(1234)  # initialisation du germe
+include("C:/Users/issa/Desktop/TA/RO/read.txt")
+n,d,f,Amin,Nr,R,regions,coords=readInstance("C:/Users/issa/Desktop/TA/RO/instance.txt")
+model=Model(Gurobi.Optimizer)
+@variable(model, Y[1:n], Bin)  
+@variable(model, X[1:n,1:n] ,Bin)
+@variable(model, U[1:n] >=0)
+D=Matrix{Int64}(zeros(n,n))
+for i in 1:n
+	for j in 1:n
+		D[i,j]=floor(sqrt(    (coords[i,1]-coords[j,1])^2+(coords[i,2]-coords[j,2])^2) )
+	end
+end
+#declaration de l objectif
+@objective(model, Min, sum(sum(D[i,j]*X[i,j] for i in 1:n) for j in 1:n) )
+
+#declaration des contraintes
+
+
+#-------------------------------------------------------------------------
+@constraint(model, sum( Y[i] for i in 1:n)>=Amin)
+@constraint(model, [i in 1:n], X[i,i]==0 )
+#@constraint(model, sum( sum( X[i,j] for j in 1:n) for i in 1:n )>=(Amin-1))
+
+for i in 1:(2^n-1)
+	Num=i
+	A=Array{Int64}(zeros(n))
+	for j in 1:n
+		A[j]=mod(Num,2)
+		Num=div(Num,2)
+	end
+	Car=sum(A)
+	if (Car>1)&(Car<(n-1))
+		@constraint(model,sum(sum(X[i,j]*A[i]*A[j] for i in 1:n) for j in 1:n)<=(Car-1))
+	end
+end
+#-------------------------------------------------------------------------
+
+
+
+for i in 1:n
+	for j in 1:n
+		@constraint(model,D[i,j]*X[i,j]<=R)
+	end
+end
+#-------------------------------------------------------------------------
+for i in 1:n
+	if (i!=f)
+		@constraint(model,sum(X[i,j] for j in 1:n)==Y[i])
+	end
+end
+#-------------------------------------------------------------------------
+@constraint(model,Y[d]==1)
+#-------------------------------------------------------------------------
+@constraint(model,U[d]==0)
+#-------------------------------------------------------------------------
+@constraint(model,sum(X[f,j] for j in 1:n)==0)
+#-------------------------------------------------------------------------
+@constraint(model,sum(X[j,d] for j in 1:n)==0)
+#-------------------------------------------------------------------------
+@constraint(model, [i in 1:n], X[i,i]==0 )
+#-------------------------------------------------------------------------
+for j in 1:n
+	if (j!=d)
+		@constraint(model, Y[j]==sum(X[i,j] for i in 1:n))
+	end
+end
+#-------------------------------------------------------------------------
+for j in 1:Nr
+	@constraint(model, sum(Y[k] for k in regions[j])>=1)
+end
+
+#-------------------------------------------------------------------------
+
+
+#resolution
+JuMP.optimize!(model)
+    
+#affichage des resultats
+obj_value = JuMP.objective_value(model)
+println("Objective value: ", obj_value)
+
+for i in 1:n
+	for j in 1:n
+		if (JuMP.value(X[i,j]) != 0)
+			println(JuMP.value(i)," ",JuMP.value(j))
+		end
+	end
+end
